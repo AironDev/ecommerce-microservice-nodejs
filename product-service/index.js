@@ -36,6 +36,8 @@ app.post("/products/create", isAuth,  async (req, res)=>{
 app.post("/products/buy", isAuth, async(req, res) =>{
     const {ids } = req.body
     const products = await Product.find({_id: {$in: ids}})
+
+    // communicate to ORDER MS via rabitmQ
     channel.sendToQueue(
         "ORDER", 
         Buffer.from(
@@ -45,24 +47,26 @@ app.post("/products/buy", isAuth, async(req, res) =>{
             })
         )
     )
-
-   channel.consume("PRODUCT", (data) =>{
-        order = JSON.parse(data.content)
-        console.log("COnsuming product queue", order)
-        channel.ack(data)
-
-    })
-
     return res.json(order)
 })
 
+//  create  to rabitmq connection and PRODUCT channel is one does not exists already
 async function connect(){
     connection = await amqp.connect('amqp://localhost:5672');
     channel = await connection.createChannel();
     channel.assertQueue("PRODUCT");
 }
 
-connect()
+// connec to rabbitmq and listen to product queue
+connect().then(() =>{
+    channel.consume("PRODUCT", (data) =>{
+        order = JSON.parse(data.content)
+        console.log("COnsuming product queue", order)
+        channel.ack(data)
+
+    })
+
+})
 
 app.listen(PORT, () =>{
     console.log(`Product service running on port ${PORT}`)

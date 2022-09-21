@@ -43,11 +43,15 @@ async function connect() {
 }
 
 connect().then(() =>{
+
+    //listen and consume data in ORDER Queue
     channel.consume("ORDER", data =>{
         let {products, userEmail} = JSON.parse(data.content)
         console.log("consuming ORDER queue", products)
         const newOrder = createOrder(products, userEmail)
         channel.ack(data)
+
+        // send response (new Order) back to Product Queue
         channel.sendToQueue("PRODUCT", Buffer.from(JSON.stringify(newOrder)))
     })
 })
